@@ -14,6 +14,8 @@ def get_summary_metrics(df, df_states):
         "non_us": len(df) - len(df_states),
         "pct_non_us": round((len(df) - len(df_states)) / len(df) * 100, 2)
     }
+
+
 ###################################################################################################
 def filter_df(
     df: pd.DataFrame,
@@ -55,6 +57,8 @@ def filter_df(
         out = out[out["AIRCRAFT"] == aircraft]
 
     return out
+
+
 ###################################################################################################
 def count_by(
     df: pd.DataFrame,
@@ -90,6 +94,8 @@ def count_by(
         out = out.head(n)
     
     return out
+
+
 ###################################################################################################
 #Calculate count statistics
 def get_top_counts(df_states: pd.DataFrame) -> dict[str, pd.DataFrame]:
@@ -100,27 +106,73 @@ def get_top_counts(df_states: pd.DataFrame) -> dict[str, pd.DataFrame]:
     }
 
 def get_time_counts(df_states: pd.DataFrame) -> dict[str, pd.DataFrame]:
+    hour_df = count_by(df_states, "HOUR", "Hour")
+
+    hour_df = hour_df[hour_df["Hour"] != "Unknown"].copy()
+    hour_df["Hour"] = hour_df["Hour"].astype(int)
+    hour_df = hour_df.sort_values("Hour")
+
     return {
         "time_of_day": count_by(df_states, "TIME_OF_DAY", "Time of Day"),
-        "hour": count_by(df_states, "HOUR", "Hour").sort_values("Hour"),
+        "hour": hour_df,
         "phase": count_by(df_states, "PHASE_GROUP", "Phase of Flight"),
     }
 
 def get_seasonality_counts(df_states: pd.DataFrame) -> dict[str, pd.DataFrame]:
+    # Month
+    month_df = count_by(df_states, "MONTH", "Month")
+    month_df = month_df[month_df["Month"] != "Unknown"].copy()
+    month_df["Month"] = month_df["Month"].astype(int)
+    month_df = month_df.sort_values("Month")
+
+    # Quarter
+    quarter_df = count_by(df_states, "QUARTER", "Quarter")
+    quarter_df = quarter_df[quarter_df["Quarter"] != "Unknown"].copy()
+    quarter_df["Quarter"] = quarter_df["Quarter"].astype(int)
+    quarter_df = quarter_df.sort_values("Quarter")
+
     return {
-        "month": count_by(df_states, "MONTH", "Month").sort_values("Month"),
-        "quarter": count_by(df_states, "QUARTER", "Quarter").sort_values("Quarter")
+        "month": month_df,
+        "quarter": quarter_df
     }
 
 def get_aircraft_counts(df_states: pd.DataFrame) -> dict[str, pd.DataFrame]:
+    num_engines_df = count_by(df_states, "NUM_ENGS", "Number of Engines")
+
+    num_engines_df["Number of Engines"] = (
+        num_engines_df["Number of Engines"]
+        .replace({
+            1: "One",
+            2: "Two",
+            3: "Three",
+            4: "Four",
+            "1": "One",
+            "2": "Two",
+            "3": "Three",
+            "4": "Four",
+        })
+        .fillna("Unknown")
+    )
+
+    order = ["One", "Two", "Three", "Four", "Unknown"]
+    num_engines_df["Number of Engines"] = pd.Categorical(
+        num_engines_df["Number of Engines"],
+        categories=order,
+        ordered=True
+    )
+
+    num_engines_df = num_engines_df.sort_values("Number of Engines")
+
     return {
         "aircraft": count_by(df_states, "AIRCRAFT", "Aircraft", n=25),
         "engine_type": count_by(df_states, "ENGINE_TYPE", "Engine Type"),
-        "num_engines": count_by(df_states, "NUM_ENGS", "Number of Engines"),
+        "num_engines": num_engines_df,
     }
 
 def get_species_counts(df_states: pd.DataFrame) -> pd.DataFrame:
     return count_by(df_states, "SPECIES", "Species", n=25)
+
+
 ###################################################################################################
 def get_yearly_counts(df_states: pd.DataFrame) -> pd.DataFrame:
     return (
@@ -130,6 +182,8 @@ def get_yearly_counts(df_states: pd.DataFrame) -> pd.DataFrame:
         .rename(columns={"YEAR": "Year"})
         .sort_values("Year")
     )
+
+
 ###################################################################################################
 # Heatmap
 def get_heatmap_data(df: pd.DataFrame) -> pd.DataFrame:
@@ -146,6 +200,8 @@ def get_heatmap_data(df: pd.DataFrame) -> pd.DataFrame:
     out["LATITUDE"] = pd.to_numeric(out["LATITUDE"], errors="coerce")
     out["LONGITUDE"] = pd.to_numeric(out["LONGITUDE"], errors="coerce")
     return out.dropna(subset=["LATITUDE", "LONGITUDE"])
+
+
 ###################################################################################################
 def prepare_scatter_data(df: pd.DataFrame, x_col: str) -> pd.DataFrame:
     """
@@ -172,6 +228,8 @@ def prepare_scatter_data(df: pd.DataFrame, x_col: str) -> pd.DataFrame:
 
     # Drop missing
     return out.dropna(subset = ['Log_Cost', f'Log_{x_col}'])
+
+
 ###################################################################################################
 def compute_correlation(df: pd.DataFrame, x_col: str) -> float:
     if len(df) < 2:
