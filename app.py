@@ -776,11 +776,10 @@ elif selected == "Scatter Plot":
 elif selected == "About":
     st.title("About")
     st.markdown("""
-        My name is Vlad Lee. I am an economic consultant at NERA and a fellow at NYC Data Science Academy. 
+        Author: Vlad Lee 
         Feel free to check out my profile pages and GitHub!
 
         <p><a href='https://www.linkedin.com/in/vlad-lee' target='_blank'>LinkedIn</a></p>
-        <p><a href='https://www.nera.com/experts/l/vladislav-lee.html?lang=en' target='_blank'>NERA</a></p>
         <p><a href='https://github.com/Vlad-Lee/Aviation-Wildlife-Strikes' target='_blank'>GitHub</a></p>
         <p>For questions or feedback, contact the author at 
         <a href='mailto:Vlad7984@gmail.com'>vlad7984@gmail.com</a>.</p>
