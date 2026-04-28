@@ -10,7 +10,7 @@ def main():
     BASE_DIR = Path(__file__).resolve().parent.parent
 
     INPUT_PATH = BASE_DIR / "data" / "raw" / "raw_data.csv"
-    OUTPUT_PATH = BASE_DIR / "data" / "processed" / "cleaned_wildlife_strikes.csv"
+    OUTPUT_PATH = BASE_DIR / "data" / "processed" / "cleaned_wildlife_strikes.parquet"
 
     # ensure output directory exists
     OUTPUT_PATH.parent.mkdir(parents=True, exist_ok=True)  # creates folders if needed :contentReference[oaicite:0]{index=0}
@@ -34,7 +34,10 @@ def main():
     ]
 
     df = df[cols_to_keep].copy()
-
+    df = df.rename(columns={
+        "INCIDENT_YEAR": "YEAR",
+        'INCIDENT_MONTH': 'MONTH'
+    })
     # -----------------------------
     # Fill categorical
     # -----------------------------
@@ -66,6 +69,8 @@ def main():
         errors='coerce'
     )
 
+    df['QUARTER'] = df['INCIDENT_DATE'].dt.quarter
+
     time_dt = pd.to_datetime(df['TIME'], format='%H:%M', errors='coerce')
 
     df['HOUR'] = time_dt.dt.hour
@@ -80,18 +85,23 @@ def main():
     # -----------------------------
     # Binary indicators
     # -----------------------------
-    df['HAS_DAMAGE'] = df['DAMAGE_LEVEL'].map({
-        'N': 0,
-        'M': 1,
-        'S': 1,
-        'D': 1,
-        'M?': np.nan,
-        'Unknown': np.nan
-    })
+    df['HAS_DAMAGE'] = np.where(
+        df['DAMAGE_LEVEL'].isin(['M', 'S', 'D', 'M?']),
+        1,
+        np.where(df['DAMAGE_LEVEL'] == 'N', 0, np.nan)
+    )
 
-    df['HAS_INJURY'] = (df['NR_INJURIES'] > 0).astype(int)
-    df['HAS_FATALITY'] = (df['NR_FATALITIES'] > 0).astype(int)
+    df['HAS_INJURY'] = np.where(
+        df['NR_INJURIES'].isna(),
+        np.nan,
+        (df['NR_INJURIES'] > 0).astype(int)
+    )
 
+    df['HAS_FATALITY'] = np.where(
+        df['NR_FATALITIES'].isna(),
+        np.nan,
+        (df['NR_FATALITIES'] > 0).astype(int)
+    )
     # -----------------------------
     # Costs
     # -----------------------------
@@ -103,11 +113,10 @@ def main():
     # -----------------------------
     # Categorical mappings
     # -----------------------------
-    df['WARNED_CLEAN'] = df['WARNED'].map({
-        'Yes': 1,
-        'No': 0,
-        'Unknown': np.nan
-    })
+    df['WARNED_FLAG'] = np.where(
+        df['WARNED'] == 'Yes', 1,
+        np.where(df['WARNED'] == 'No', 0, np.nan)
+    )
 
     engine_map = {
         'A': 'Piston', 'B': 'Turbojet', 'C': 'Turboprop',
@@ -120,7 +129,7 @@ def main():
         'N': 'None', 'M': 'Minor', 'M?': 'Undetermined',
         'S': 'Substantial', 'D': 'Destroyed', 'Unknown': 'Unknown'
     }
-    df['DAMAGE_CATEGORY'] = df['DAMAGE_LEVEL'].map(damage_map)
+    df['DAMAGE_CATEGORY'] = df['DAMAGE_LEVEL'].map(damage_map).fillna('Unknown')
 
     phase_map = {
         'Take-off Run': 'Takeoff', 'Departure': 'Takeoff',
@@ -130,7 +139,7 @@ def main():
         'Taxi': 'Ground', 'Parked': 'Ground',
         'Local': 'Unknown', 'Unknown': 'Unknown'
     }
-    df['PHASE_GROUP'] = df['PHASE_OF_FLIGHT'].map(phase_map)
+    df['PHASE_GROUP'] = df['PHASE_OF_FLIGHT'].map(phase_map).fillna('Unknown')
 
     df['OPERATOR_TYPE'] = df['OPID'].replace({
         'PVT': 'Private',
@@ -138,6 +147,44 @@ def main():
         'GOV': 'Government',
         'MIL': 'Military'
     })
+
+    state_map = {
+        'AL': 'Alabama', 'AK': 'Alaska', 'AZ': 'Arizona', 'AR': 'Arkansas',
+        'CA': 'California', 'CO': 'Colorado', 'CT': 'Connecticut', 'DE': 'Delaware',
+        'FL': 'Florida', 'GA': 'Georgia', 'HI': 'Hawaii', 'ID': 'Idaho',
+        'IL': 'Illinois', 'IN': 'Indiana', 'IA': 'Iowa', 'KS': 'Kansas',
+        'KY': 'Kentucky', 'LA': 'Louisiana', 'ME': 'Maine', 'MD': 'Maryland',
+        'MA': 'Massachusetts', 'MI': 'Michigan', 'MN': 'Minnesota', 'MS': 'Mississippi',
+        'MO': 'Missouri', 'MT': 'Montana', 'NE': 'Nebraska', 'NV': 'Nevada',
+        'NH': 'New Hampshire', 'NJ': 'New Jersey', 'NM': 'New Mexico', 'NY': 'New York',
+        'NC': 'North Carolina', 'ND': 'North Dakota', 'OH': 'Ohio', 'OK': 'Oklahoma',
+        'OR': 'Oregon', 'PA': 'Pennsylvania', 'RI': 'Rhode Island', 'SC': 'South Carolina',
+        'SD': 'South Dakota', 'TN': 'Tennessee', 'TX': 'Texas', 'UT': 'Utah',
+        'VT': 'Vermont', 'VA': 'Virginia', 'WA': 'Washington', 'WV': 'West Virginia',
+        'WI': 'Wisconsin', 'WY': 'Wyoming'
+    }
+
+    territory_map = {
+        'PR': 'Puerto Rico',
+        'VI': 'U.S. Virgin Islands',
+        'GU': 'Guam',
+        'AS': 'American Samoa',
+        'MP': 'Northern Mariana Islands',
+        'UM': 'U.S. Minor Outlying Islands'
+    }
+
+    def map_region(state):
+        if state in state_map:
+            return state_map[state]
+        elif state in territory_map:
+            return territory_map[state]
+        elif state == 'Unknown':
+            return 'Unknown'
+        else:
+            return 'International'
+
+    df['REGION_CLEAN'] = df['STATE'].apply(map_region)
+    df['IS_US_STATE'] = df['STATE'].isin(state_map).astype(int)
 
     # -----------------------------
     # Drop unused
@@ -147,8 +194,11 @@ def main():
     # -----------------------------
     # Save
     # -----------------------------
-    df.to_csv(OUTPUT_PATH, index=False)
-
+    df.to_parquet(
+        OUTPUT_PATH,
+        compression="snappy",
+        index=False
+    )
 
 if __name__ == "__main__":
     main()

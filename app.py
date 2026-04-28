@@ -1,43 +1,18 @@
+import zipfile
+import requests
+import io
 import streamlit as st
-import pandas as pd
-import altair as alt
-import snowflake.connector
-import matplotlib.pyplot as plt
-import numpy as np
-import folium
-from folium.plugins import HeatMap
-from streamlit_folium import folium_static
-import scipy.stats as stats
-import seaborn as sns
-from streamlit_option_menu import option_menu
-from io import StringIO
-import tempfile
 
-# Access Snowflake credentials from Streamlit secrets
-sf_user = st.secrets["snowflake"]["user"]
-sf_private_key = st.secrets["snowflake"]["private_key"]
-sf_account = st.secrets["snowflake"]["account"]
-sf_warehouse = st.secrets["snowflake"]["warehouse"]
-sf_database = st.secrets["snowflake"]["database"]
-sf_schema = st.secrets["snowflake"]["schema"]
-
-# Write the private key to a temporary file
-with tempfile.NamedTemporaryFile(delete=False) as temp_key_file:
-    temp_key_file.write(sf_private_key.encode())  # Write the private key content to the file
-    temp_key_file_path = temp_key_file.name  # Get the path to the temporary file
-
-# Connect to Snowflake database
-conn = snowflake.connector.connect(
-    user=sf_user,
-    private_key_file=temp_key_file_path,  # Use the path of the temporary key file
-    account=sf_account,
-    warehouse=sf_warehouse,
-    database=sf_database,
-    schema=sf_schema
-)
-
-# Create a cursor and perform operations
-cursor = conn.cursor()  
+@st.cache_data
+def load_data():
+    url = "https://github.com/user-attachments/files/27147217/cleaned_wildlife_strikes.zip"
+    r = requests.get(url)
+    z = zipfile.ZipFile(io.BytesIO(r.content))
+    
+    with z.open("cleaned_wildlife_strikes.parquet") as f:
+        return pd.read_parquet(f)
+    
+df = load_data().copy()
 
 ###################################################################################################
 #Configure settings for streamlit app
@@ -73,29 +48,8 @@ if selected == "Home":
         Data obtained from the official 
         [**FAA Wildlife Strike Database**](https://wildlife.faa.gov/).
     """, unsafe_allow_html=True)
-    st.markdown("## Key Metrics (1990 - 2025):")         
-    
-#Query to get total metrics
-    query_total_metrics = """
-    SELECT
-        COUNT(*) AS total_bird_strikes,
-        SUM(COST_REPAIRS + COST_OTHER) AS total_cost,
-        SUM(COST_REPAIRS_INFL_ADJ + COST_OTHER_INFL_ADJ) AS total_cost_infl_adj,
-        SUM(TRY_CAST(NR_FATALITIES AS NUMERIC)) AS total_fatalities,
-        SUM(CAST(NR_INJURIES AS NUMERIC)) AS total_injuries
-    FROM FAA_BIRD_STRIKES
-    """
-    #Execute query
-    cursor.execute(query_total_metrics)
+    st.markdown("## Key Metrics (1990 - 2026):")         
 
-    #Create list with results
-    metrics_result = cursor.fetchone()
-    total_bird_strikes = metrics_result[0]
-    total_cost = metrics_result[1]
-    total_cost_infl_adj = metrics_result[2]
-    total_fatalities = metrics_result[3]
-    total_injuries = metrics_result[4]
-    
     #Create 4 columns for displaying the metrics
     col1, col2, col3, col4, col5 = st.columns(5)
     
@@ -113,90 +67,43 @@ if selected == "Home":
     
     with col5:
         st.metric(label="Total Injuries", value=total_injuries)
-    
-    #Query to get top 10 states
-    query_top_states = """
-    SELECT 
-        STATE, COUNT(*) AS bird_strikes
-    FROM FAA_BIRD_STRIKES
-    GROUP BY STATE
-    ORDER BY bird_strikes DESC
-    LIMIT 10
-    """
-    
-    #Execute query
-    cursor.execute(query_top_states)
-    top_states = cursor.fetchall()
-
-    #Create top states df
-    states_df = pd.DataFrame(top_states, columns=["State", "Bird Strikes"])
-    #Replace na with unknown
-    states_df['State'].fillna('Unknown', inplace=True)
-
-    #Query to get top 10 airports
-    query_top_airports = """
-    SELECT 
-        AIRPORT, COUNT(*) AS bird_strikes
-    FROM FAA_BIRD_STRIKES
-    GROUP BY AIRPORT
-    ORDER BY bird_strikes DESC
-    LIMIT 10
-    """
-    #Execute query
-    cursor.execute(query_top_airports)
-    top_airports = cursor.fetchall()
-
-    #Create top airports df
-    airports_df = pd.DataFrame(top_airports, columns=["Airport", "Bird Strikes"])
-
-    #Query to get top 10 carriers
-    query_top_carriers = """
-    SELECT 
-        OPERATOR, COUNT(*) AS carriers
-    FROM FAA_BIRD_STRIKES
-    GROUP BY OPERATOR
-    ORDER BY carriers DESC
-    LIMIT 10
-    """
-    #Execute query
-    cursor.execute(query_top_carriers)
-    top_carriers = cursor.fetchall()
-
-    #Create top airports df
-    carriers_df = pd.DataFrame(top_carriers, columns=["Carrier", "Bird Strikes"])
-    
+###################################################################################################
     #Create three columns for the bar charts side by side
     chart_col1, chart_col2, chart_col3 = st.columns(3)    
     
     with chart_col1:
         #Plot Top 10 States bar chart
-        st.subheader("Top 10 States with Wildlife Strikes")
+        st.subheader('Top 10 States with Wildlife Strikes')
+        state_count = strike_counts['state_count'].sort_values('Number of Strikes')
+
         fig, ax = plt.subplots()
-        ax.bar(states_df["State"], states_df["Bird Strikes"], color='skyblue')
-        ax.set_xlabel("State")
-        ax.set_ylabel("Number of Wildlife Strikes")
+        ax.barh(state_count['State'], state_count['Number of Strikes'], color='skyblue')
+        ax.set_xlabel("Number of Wildlife Strikes")
+        ax.set_ylabel("State")
         st.pyplot(fig)
 
     with chart_col2:
         #Plot Top 10 Airports bar chart
         st.subheader("Top 10 Airports with Wildlife Strikes")
+        airport_count = strike_counts['airport_count'].sort_values('Number of Strikes')
+
         fig, ax = plt.subplots()
-        ax.barh(airports_df["Airport"], airports_df["Bird Strikes"], color='lightgreen')
-        ax.set_xlabel("Airport")
-        ax.set_ylabel("Number of Wildlife Strikes")
-        ax.invert_yaxis()
+        ax.barh(airport_count['Airport'], airport_count['Number of Strikes'], color='lightgreen')
+        ax.set_xlabel("Number of Wildlife Strikes")
+        ax.set_ylabel("Airport")
         st.pyplot(fig)
     
     with chart_col3:
         #Plot Top 10 Carriers bar chart
         st.subheader("Top 10 Carriers with Wildlife Strikes")
+        carrier_count = strike_counts['operator_count'].sort_values('Number of Strikes')
+
         fig, ax = plt.subplots()
-        ax.barh(carriers_df["Carrier"], carriers_df["Bird Strikes"], color='orange')
-        ax.set_xlabel("Carrier")
-        ax.set_ylabel("Number of Wildlife Strikes")
-        ax.invert_yaxis()
+        ax.barh(carrier_count["Carrier"], carrier_count["Number of Strikes"], color='orange')
+        ax.set_xlabel("Number of Wildlife Strikes")
+        ax.set_ylabel("Carrier")
         st.pyplot(fig)
-       
+            
 ###################################################################################################
 #Configure Heatmap page.    
 elif selected == "Heatmap":
