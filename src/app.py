@@ -41,7 +41,7 @@ st.set_page_config(
 # -----------------------------
 @st.cache_data
 def load_data():
-    url = "https://github.com/user-attachments/files/27147217/cleaned_wildlife_strikes.zip"
+    url = "https://github.com/user-attachments/files/27153418/cleaned_wildlife_strikes.zip"
     r = requests.get(url)
     r.raise_for_status()
     z = zipfile.ZipFile(io.BytesIO(r.content))
@@ -165,7 +165,7 @@ if selected == "Home":
         airport_count = counts["airports"]
 
         fig, ax = plt.subplots()
-        ax.barh(airport_count["Airport"], airport_count["Number of Strikes"])
+        ax.barh(airport_count["Airport"], airport_count["Number of Strikes"], color='green')
         ax.set_xlabel("Number of Wildlife Strikes")
         ax.set_ylabel("Airport")
         ax.invert_yaxis()
@@ -176,7 +176,7 @@ if selected == "Home":
         carrier_count = counts["carriers"]
 
         fig, ax = plt.subplots()
-        ax.barh(carrier_count["Carrier"], carrier_count["Number of Strikes"])
+        ax.barh(carrier_count["Carrier"], carrier_count["Number of Strikes"], color='orange')
         ax.set_xlabel("Number of Wildlife Strikes")
         ax.set_ylabel("Carrier")
         ax.invert_yaxis()
