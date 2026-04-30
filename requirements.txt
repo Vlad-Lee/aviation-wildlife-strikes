@@ -4,5 +4,8 @@ pandas
 numpy
 scipy
 matplotlib
+seaborn
 requests
 pyarrow
+folium
+streamlit-folium
