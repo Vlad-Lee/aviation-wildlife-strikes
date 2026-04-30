@@ -1,8 +1,8 @@
 streamlit
-pandas
-matplotlib
-seaborn
-folium
-streamlit-folium
 streamlit-option-menu
+pandas
+numpy
+scipy
+matplotlib
 requests
+pyarrow
