@@ -203,7 +203,7 @@ def get_heatmap_data(df: pd.DataFrame) -> pd.DataFrame:
 
 
 ###################################################################################################
-def prepare_scatter_data(df: pd.DataFrame, x_col: str) -> pd.DataFrame:
+def get_scatter_data(df: pd.DataFrame, x_col: str) -> pd.DataFrame:
     """
     Prepare data for scatter plot with log transformations.
 
