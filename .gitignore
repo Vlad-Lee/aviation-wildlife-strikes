@@ -31,3 +31,6 @@ analysis.py
 notebooks/*
 outputs/*
 .devcontainer/
+
+# Windows zone identifier files
+*.Zone.Identifier
