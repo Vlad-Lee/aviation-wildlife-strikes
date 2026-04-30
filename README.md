@@ -1,7 +1,12 @@
-✈️ Aviation Wildlife Strikes Dashboard
+# Aviation Wildlife Strikes Dashboard
 
-![Dashboard Preview](figures/dashboard_preview.png)
-Overview
+🚀 **Live Interactive Dashboard:**  
+https://aviation-wildlife-strikes-vl.streamlit.app/
+
+---
+
+## Overview
+...
 
 This project is an interactive Streamlit dashboard that explores wildlife strikes in aviation using data from the FAA Wildlife Strike Database. The goal is to identify patterns in when, where, and how wildlife strikes occur, and to understand factors associated with more severe incidents.
 
