@@ -25,3 +25,9 @@ outputs/tables/*
 Thumbs.db
 
 .venv/
+
+analysis.py
+
+notebooks/*
+outputs/*
+.devcontainer/
