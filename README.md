@@ -91,6 +91,14 @@ Includes:
 - Damage, injuries, and cost  
 
 Processed data is stored as a compressed parquet file for efficient loading.
+---
+
+## Data Processing
+
+Raw FAA data is cleaned and transformed using a dedicated pipeline (`scripts/clean_data.py`), including:
+- handling missing values
+- feature engineering (time, categories)
+- filtering to relevant observations
 
 ---
 
