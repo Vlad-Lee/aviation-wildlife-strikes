@@ -93,7 +93,39 @@ Processed data is stored as a compressed parquet file for efficient loading.
 ---
 
 ## Project Structure
+## Project Structure
 
+```
+aviation-wildlife-strikes/
+├── README.md
+├── requirements.txt
+
+├── src/
+│   ├── app.py
+│   ├── data.py
+│   ├── filters.py
+│   ├── plotting.py
+│   ├── aggregations.py
+│   └── app_pages/
+│       ├── home.py
+│       ├── heatmap.py
+│       ├── yearly_strikes.py
+│       ├── time_patterns.py
+│       ├── seasonality.py
+│       ├── aircraft.py
+│       ├── species.py
+│       └── cost_relationships.py
+
+├── data/
+│   ├── raw/        # ignored
+│   └── processed/  # ignored
+
+├── scripts/
+│   └── clean_data.py
+
+└── notebooks/
+    └── cleaning.ipynb
+```
 
 aviation-wildlife-strikes/
 README.md
