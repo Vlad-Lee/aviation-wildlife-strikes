@@ -2,6 +2,7 @@
 
 🚀 **Live Interactive Dashboard:**  
 https://aviation-wildlife-strikes-vl.streamlit.app/
+Interactive dashboard analyzing aviation wildlife strikes with a focus on risk patterns, seasonality, and cost drivers.
 
 ## Dashboard Preview
 Explore trends in wildlife strikes across time, geography, aircraft, and cost drivers.
@@ -92,9 +93,37 @@ Processed data is stored as a compressed parquet file for efficient loading.
 
 ---
 
-## Project Structure
-## Project Structure
+## How to Run
 
+### 1. Clone the repository
+```bash
+git clone https://github.com/Vlad-Lee/Aviation-Wildlife-Strikes.git
+cd Aviation-Wildlife-Strikes
+```
+
+### 2. Create and activate a virtual environment
+```bash
+python -m venv .venv
+source .venv/bin/activate      # Mac/Linux
+.venv\Scripts\activate         # Windows
+```
+
+### 3. Install dependencies
+```bash
+pip install -r requirements.txt
+```
+
+### 4. Run the app
+```bash
+streamlit run src/app.py
+```
+
+The app will open at:
+http://localhost:8501
+
+**Note:** The dashboard automatically downloads preprocessed data at runtime. Running the data cleaning pipeline is not required.
+
+## Project Structure
 ```
 aviation-wildlife-strikes/
 ├── README.md
