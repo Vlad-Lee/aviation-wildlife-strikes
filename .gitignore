@@ -8,6 +8,12 @@ venv/
 data/raw/*
 data/processed/*
 
+# --- CUSTOM OVERRIDE FOR STREAMLIT APP DATA ---
+# Force Git to look inside the app directory and track the zipped parquet asset
+!data/processed/app/
+!data/processed/app/app_data_package.zip
+# -----------------------------------------------
+
 # but keep the folders
 !data/raw/.gitignore
 !data/processed/.gitignore
@@ -23,8 +29,6 @@ outputs/tables/*
 # OS files
 .DS_Store
 Thumbs.db
-
-.venv/
 
 analysis.py
 

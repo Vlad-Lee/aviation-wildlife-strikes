@@ -8,7 +8,8 @@ import streamlit as st
 @st.cache_data
 def load_data():
     """Load cleaned wildlife strike data from a zipped parquet file."""
-    url = "https://github.com/user-attachments/files/27862670/app_data_package.zip"
+    # UPDATED: Points permanently to the raw file asset tracked in your main repository branch
+    url = "https://github.com/Vlad-Lee/aviation-wildlife-strikes/raw/main/data/processed/app/app_data_package.zip"
 
     r = requests.get(url)
     r.raise_for_status()

@@ -1,11 +1,12 @@
 streamlit
-streamlit-option-menu
 pandas
 numpy
 scipy
 matplotlib
 seaborn
-requests
-pyarrow
 folium
 streamlit-folium
+streamlit-option-menu
+requests
+pyarrow
+scikit-learn
