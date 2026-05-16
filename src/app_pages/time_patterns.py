@@ -113,8 +113,4 @@ def show_time(
         ax.invert_yaxis()
         style_chart(ax)
         show_plot(fig)
-
-    st.caption(
-    f"Wildlife strikes are most common during daytime hours and during approach, takeoff, and landing. "
-    f"Year range: {start_year} to {end_year}"
-    )   
+    

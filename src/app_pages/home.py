@@ -30,28 +30,23 @@ def show_home(df, df_states, min_year: int, max_year: int) -> None:
 
     st.markdown(f"## Key Metrics ({min_year} - {max_year})")
 
-    col1, col2, col3, col4, col5, col6 = st.columns(6)
+    col1, col2, col3, col4 = st.columns(4)
 
     with col1:
         st.metric("Total Wildlife Strikes", f"{metrics['total_bird_strikes']:,}")
-
-    with col2:
-        st.metric("Total Cost", f"${metrics['total_cost']:,.0f}")
-
-    with col3:
-        st.metric(
-            "Total Cost (Inflation Adjusted)",
-            f"${metrics['total_cost_infl_adj']:,.0f}",
-        )
-
-    with col4:
         st.metric("Total Fatalities", f"{metrics['total_fatalities']:,.0f}")
 
-    with col5:
+    with col2:
+        st.metric("Damaged Aircraft", f"{metrics['total_damaged_aircraft']:,}")
         st.metric("Total Injuries", f"{metrics['total_injuries']:,.0f}")
 
-    with col6:
-        st.metric("Non-US (%)", f"{metrics['pct_non_us']:.2f}%")
+    with col3:
+        st.metric("Structural Damage Rate", f"{metrics['damage_rate_pct']:.1f}%")
+        st.metric("Non-US Incidents", f"{metrics['pct_non_us']:.1f}%")
+        
+    with col4:
+        st.metric("Total Cost", f"${metrics['total_cost']:,.0f}")
+        st.metric("Cost (Inflation Adj)", f"${metrics['total_cost_infl_adj']:,.0f}")
 
     # -----------------------------
     # Top counts

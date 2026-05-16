@@ -5,14 +5,18 @@ from scipy import stats
 ###################################################################################################
 #Calculate summary metrics.
 def get_summary_metrics(df, df_states):
+    total_rows = len(df)
+    
     return {
-        "total_bird_strikes": len(df),
+        "total_bird_strikes": total_rows,
+        "total_damaged_aircraft": int(df["HAS_DAMAGE"].sum()),
+        "damage_rate_pct": round((df["HAS_DAMAGE"].sum() / total_rows) * 100, 2) if total_rows > 0 else 0,
         "total_cost": df["TOTAL_COST"].sum(),
         "total_cost_infl_adj": df["TOTAL_COST_INFL_ADJ"].sum(),
         "total_fatalities": df["NR_FATALITIES"].sum(),
         "total_injuries": df["NR_INJURIES"].sum(),
-        "non_us": len(df) - len(df_states),
-        "pct_non_us": round((len(df) - len(df_states)) / len(df) * 100, 2)
+        "non_us": total_rows - len(df_states),
+        "pct_non_us": round((total_rows - len(df_states)) / total_rows * 100, 2) if total_rows > 0 else 0
     }
 
 

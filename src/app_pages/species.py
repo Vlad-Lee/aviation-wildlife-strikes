@@ -50,8 +50,6 @@ def show_species(
     species_df = get_species_counts(filtered_df)
     species_df = species_df.head(15)
 
-    species_df = get_species_counts(filtered_df)
-
     if species_df.empty:
         st.warning("No wildlife strike records match the selected filters.")
         return

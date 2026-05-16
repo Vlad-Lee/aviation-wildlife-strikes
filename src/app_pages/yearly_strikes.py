@@ -14,7 +14,7 @@ def show_yearly_strikes(
     time_of_day_list: list[str],
     aircraft_list: list[str],
 ) -> None:
-    st.title("When Wildlife Strikes Occur")
+    st.title("Yearly Wildlife Strikes")
 
     start_year, end_year, selected_operator, selected_time_of_day, selected_aircraft = (
         get_sidebar_filters(
