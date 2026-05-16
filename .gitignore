@@ -34,3 +34,5 @@ outputs/*
 
 # Windows zone identifier files
 *.Zone.Identifier
+
+model_exploration.ipynb
