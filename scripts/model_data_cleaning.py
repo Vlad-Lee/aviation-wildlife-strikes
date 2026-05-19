@@ -60,46 +60,22 @@ def main():
     # -------------------------------------------------------------------------
     # 3. Target Variable & Flag Engineering
     # -------------------------------------------------------------------------
-    # Stage 1 target conditions
-    damage_level = df["DAMAGE_LEVEL"].isin(["M", "S", "D", "M?"])
-    
-    # Indicator columns for part-specific damage
-    dam_cols = [
-        'DAM_RAD', 'DAM_WINDSHLD', 'DAM_NOSE', 'DAM_ENG1', 'DAM_ENG2', 
-        'DAM_ENG3', 'DAM_ENG4', 'DAM_PROP', 'DAM_WING_ROT', 'DAM_FUSE', 
-        'DAM_LG', 'DAM_TAIL', 'DAM_LGHTS', 'DAM_OTHER'
-    ]
-
-    # Check if ANY of the damage columns are flagged as 1 for that row
-    existing_dam_cols = [col for col in dam_cols if col in df.columns]
-    cond_component_damage = (df[existing_dam_cols] == 1).any(axis=1)
-
-    # Establish the unified binary classification target
-    df["HAS_DAMAGE"] = np.where(
-        damage_level | cond_component_damage,
-        1,
-        np.where(df["DAMAGE_LEVEL"] == "N", 0, np.nan)
-    )
-
     # Stage 2 Target Condition: Total Inflation Adjusted Financial Harm
     cost_rep = df["COST_REPAIRS_INFL_ADJ"].fillna(0)
     cost_oth = df["COST_OTHER_INFL_ADJ"].fillna(0)
     df["TOTAL_COST_INFL_ADJ"] = cost_rep + cost_oth
 
+    # Stage 1 target conditions (The Fiscal Hurdle)
+    df["HAS_DAMAGE"] = (df["TOTAL_COST_INFL_ADJ"] > 0).astype(int)
+
     # Operational Warning Flags
-    df["WARNED_FLAG"] = np.where(
-        df["WARNED"] == "Yes", 1, np.where(df["WARNED"] == "No", 0, 0)
-    )
+    df["WARNED_FLAG"] = np.where(df["WARNED"] == "Yes", 1, 0)
 
 
     # -------------------------------------------------------------------------
     # 4. Date and Time Feature Engineering
     # -------------------------------------------------------------------------
-    df["INCIDENT_DATE"] = pd.to_datetime(
-        df["INCIDENT_DATE"],
-        format="%Y-%m-%d",
-        errors="coerce",
-    )
+    df["INCIDENT_DATE"] = pd.to_datetime(df["INCIDENT_DATE"], format="%Y-%m-%d", errors="coerce")
     df["QUARTER"] = df["INCIDENT_DATE"].dt.quarter
 
     # Parse raw time strings to extract hours
@@ -169,6 +145,8 @@ def main():
     ]
 
     X = df_model[features_to_keep].copy()
+    X = pd.get_dummies(X, drop_first=True)
+    
     y_class = df_model["HAS_DAMAGE"]
     y_reg = df_model["TOTAL_COST_INFL_ADJ"]
 

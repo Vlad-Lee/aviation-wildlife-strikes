@@ -40,3 +40,7 @@ outputs/*
 *.Zone.Identifier
 
 model_exploration.ipynb
+
+# --- OPTUNA TUNING DATABASES ---
+*.db
+*.sqlite3
