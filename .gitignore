@@ -4,6 +4,9 @@ __pycache__/
 .venv/
 venv/
 
+# Windows zone identifier files
+*.Zone.Identifier
+
 # ignore all data files
 data/raw/*
 data/processed/*
