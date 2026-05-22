@@ -2,11 +2,13 @@
 
 An interactive Streamlit dashboard and two-stage hurdle model for analyzing and predicting financial damage from aviation wildlife strikes in U.S. airspace, built on the [FAA Wildlife Strike Database](https://wildlife.faa.gov/).
 
+![Dashboard Preview](outputs/figures/dashboard_preview.png)
+
 ---
 
 ## Live App
 
-[View on Streamlit Cloud](https://aviation-wildlife-strikes-vl.streamlit.app/)
+[View on Streamlit Cloud](https://aviation-wildlife-strikes-v2.streamlit.app)
 
 ---
 
@@ -138,5 +140,5 @@ The raw data file is not committed to this repository due to size. Download it d
 **Vlad Lee** — Data Scientist (MIDS, UC Berkeley)
 
 - [LinkedIn](https://www.linkedin.com/in/vlad-lee)
-- [GitHub](https://github.com/Vlad-Lee/Aviation-Wildlife-Strikes)
+- [GitHub](https://github.com/Vlad-Lee/aviation-wildlife-strikes)
 - vlad7984@gmail.com
