@@ -47,3 +47,7 @@ model_exploration.ipynb
 # --- OPTUNA TUNING DATABASES ---
 *.db
 *.sqlite3
+/logs
+
+debug.py
+debug2.ipynb

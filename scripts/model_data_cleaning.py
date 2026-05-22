@@ -1,234 +1,198 @@
-from pathlib import Path
-import numpy as np
 import pandas as pd
-from sklearn.model_selection import train_test_split
+import numpy as np
 import zipfile
+import io
+import os
+from pathlib import Path
+from sklearn.model_selection import train_test_split
 
-
-def main():
-    # -------------------------------------------------------------------------
-    # 1. Paths & Directory Architecture
-    # -------------------------------------------------------------------------
-    base_dir = Path(__file__).resolve().parent.parent
-
-    input_path = base_dir / "data" / "raw" / "raw_data.csv"
-    output_dir = base_dir / "data" / "processed" / "modeling"
-
-    # Ensure the exact nested modeling output folder structure exists
-    output_dir.mkdir(parents=True, exist_ok=True)
-
-    print("🚀 Initializing Production Modeling Data Cleaning Pipeline...")
-    df = pd.read_csv(input_path, low_memory=False)
-
-    # Standardize column header casings to minimize lookup mismatches
+def clean_and_engineer(file_path):
+    print("🚀 Loading and renaming raw data...")
+    df = pd.read_csv(file_path, low_memory=False)
     df.columns = df.columns.str.strip().str.upper()
 
-    # Rename temporal features for readability
-    df = df.rename(columns={"INCIDENT_YEAR": "YEAR", "INCIDENT_MONTH": "MONTH"})
+    # Mirror app_data_cleaning.py filters for consistency
+    df = df[df["FAAREGION"].notna() & (df["FAAREGION"].str.strip().str.upper() != "FGN")].copy()
 
-
-    # -------------------------------------------------------------------------
-    # 2. Vectorized Feature Calculations & Text Formatting
-    # -------------------------------------------------------------------------
-    # Safe categorical text normalization across raw features
-    text_cols = [
-        "STATE", "TIME_OF_DAY", "AIRPORT", "RUNWAY", "OPID", "OPERATOR",
-        "AIRCRAFT", "AC_CLASS", "TYPE_ENG", "PHASE_OF_FLIGHT", "SPECIES",
-        "NUM_SEEN", "NUM_STRUCK", "SIZE", "DAMAGE_LEVEL", "WARNED", "AC_MASS"
-    ]
-    for col in text_cols:
-        if col in df.columns:
-            df[col] = df[col].astype("string").fillna("Unknown").str.strip()
-
-    # Strict numeric element conversion
-    numeric_cols = [
-        "LATITUDE", "LONGITUDE", "HEIGHT", "SPEED", "DISTANCE",
-        "NR_INJURIES", "NR_FATALITIES", "COST_REPAIRS", "COST_OTHER",
-        "COST_REPAIRS_INFL_ADJ", "COST_OTHER_INFL_ADJ",
-    ]
-    df[numeric_cols] = df[numeric_cols].apply(pd.to_numeric, errors="coerce")
-
-    # Standardize number of engines as a categorical feature
-    df["NUM_ENGS"] = (
-        pd.to_numeric(df["NUM_ENGS"], errors="coerce")
-        .astype("Int64")
-        .astype("string")
-        .fillna("Unknown")
-    )
-
-
-    # -------------------------------------------------------------------------
-    # 3. Target Variable & Flag Engineering
-    # -------------------------------------------------------------------------
-    # Stage 2 Target Condition: Total Inflation Adjusted Financial Harm
-    cost_rep = df["COST_REPAIRS_INFL_ADJ"].fillna(0)
-    cost_oth = df["COST_OTHER_INFL_ADJ"].fillna(0)
-    df["TOTAL_COST_INFL_ADJ"] = cost_rep + cost_oth
-
-    # Stage 1 target conditions (The Fiscal Hurdle)
-    df["HAS_DAMAGE"] = (df["TOTAL_COST_INFL_ADJ"] > 0).astype(int)
-
-    # Operational Warning Flags
-    df["WARNED_FLAG"] = np.where(df["WARNED"] == "Yes", 1, 0)
-
-
-    # -------------------------------------------------------------------------
-    # 4. Date and Time Feature Engineering
-    # -------------------------------------------------------------------------
-    df["INCIDENT_DATE"] = pd.to_datetime(df["INCIDENT_DATE"], format="%Y-%m-%d", errors="coerce")
-    df["QUARTER"] = df["INCIDENT_DATE"].dt.quarter
-
-    # Parse raw time strings to extract hours
-    time_dt = pd.to_datetime(df["TIME"], format="%H:%M", errors="coerce")
-    df["HOUR"] = time_dt.dt.hour
-
-    # Bin hours into your categorical TIME_BUCKET
-    df["TIME_BUCKET"] = pd.cut(
-        df["HOUR"],
-        bins=[-1, 5, 11, 17, 23],
-        labels=["Night", "Morning", "Afternoon", "Evening"],
-    )
-    
-    # Convert the Categorical type to string and handle nulls safely
-    df["TIME_BUCKET"] = df["TIME_BUCKET"].astype(str).fillna("UNKNOWN").str.upper()
-
-
-    # -------------------------------------------------------------------------
-    # 5. Categorical Mappings
-    # -------------------------------------------------------------------------
-    engine_map = {
-        "A": "Piston", "B": "Turbojet", "C": "Turboprop", "D": "Turbofan",
-        "E": "Glider", "F": "Helicopter", "Y": "Other", "Unknown": "Unknown"
+    us_states = {
+        "AL","AK","AZ","AR","CA","CO","CT","DE","FL","GA","HI","ID","IL","IN",
+        "IA","KS","KY","LA","ME","MD","MA","MI","MN","MS","MO","MT","NE","NV",
+        "NH","NJ","NM","NY","NC","ND","OH","OK","OR","PA","RI","SC","SD","TN",
+        "TX","UT","VT","VA","WA","WV","WI","WY"
     }
-    df["ENGINE_TYPE"] = df["TYPE_ENG"].map(engine_map).fillna("Unknown")
+    df = df[df["STATE"].isin(us_states)].copy()
+
+    # 1. IMMEDIATE RENAME & MAP: Force raw columns to analytical schema
+    df = df.rename(columns={
+        "TYPE_ENG": "ENGINE_TYPE"
+    })
+    
+    # Standardize OPERATOR codes to 4 main categories (MIL, GOV, PVT, BUS)
+    # to prevent feature explosion during one-hot encoding.
+    def map_operator_to_category(name):
+        name = str(name).upper()
+        if any(word in name for word in ['MILITARY', 'NAVY', 'AIR FORCE', 'ARMY', 'USAF', 'USCG', 'COAST GUARD']):
+            return 'MIL'
+        if any(word in name for word in ['GOV', 'FED', 'STATE', 'COUNTY', 'CITY']):
+            return 'GOV'
+        if any(word in name for word in ['PRIVATE', 'PRIVATELY', 'PERSONAL', 'PVT', 'CHARTER']):
+            return 'PVT'
+        return 'BUS'
+    
+    # Apply mapping if the raw column exists
+    if "OPERATOR" in df.columns:
+        df["OPERATOR_CAT"] = df["OPERATOR"].apply(map_operator_to_category)
 
     phase_map = {
-        "Take-off Run": "Takeoff", "Departure": "Takeoff", "Climb": "Climb",
-        "En Route": "Cruise", "Descent": "Descent", "Approach": "Approach",
-        "Arrival": "Approach", "Landing Roll": "Landing", "Taxi": "Ground",
-        "Parked": "Ground", "Local": "Unknown", "Unknown": "Unknown"
+        "TAKE-OFF RUN": "TAKEOFF", "DEPARTURE": "TAKEOFF", "CLIMB": "CLIMB",
+        "EN ROUTE": "CRUISE", "DESCENT": "DESCENT", "APPROACH": "APPROACH",
+        "ARRIVAL": "APPROACH", "LANDING ROLL": "LANDING", "TAXI": "GROUND",
+        "PARKED": "GROUND", "LOCAL": "UNKNOWN"
     }
-    df["PHASE_GROUP"] = df["PHASE_OF_FLIGHT"].map(phase_map).fillna("Unknown")
+    # Safely map phase, if column exists
+    if "PHASE_OF_FLIGHT" in df.columns:
+        df["PHASE_GROUP"] = df["PHASE_OF_FLIGHT"].map(phase_map).fillna("UNKNOWN")
 
-    df["OPERATOR_TYPE"] = df["OPID"].replace({
-        "PVT": "Private", "BUS": "Business", "GOV": "Government", "MIL": "Military"
-    }).fillna("Unknown")
+        # Convert continuous height into meaningful altitude bins to handle extreme 
+    # skew (high frequency of ground strikes) and improve feature robustness.
+    def bin_height(height):
+        height = pd.to_numeric(height, errors='coerce')
+        if pd.isna(height) or height < 0: return "UNKNOWN"
+        if height == 0: return "GROUND"
+        if height < 500: return "LOW"
+        if height < 3000: return "APPROACH_CLIMB"
+        return "CRUISE"
 
-    # Final string element standardization to enforce clean groupings
-    for col in ["SIZE", "AC_MASS", "ENGINE_TYPE", "PHASE_GROUP", "OPERATOR_TYPE", "FAAREGION", "TIME_BUCKET"]:
-        if col in df.columns:
-            df[col] = df[col].astype(str).str.strip().str.upper()
+    # Apply this in clean_and_engineer:
+    df["HEIGHT_BIN"] = df["HEIGHT"].apply(bin_height)
 
-    # -------------------------------------------------------------------------
-    # 6. The Unified Data Funnel (Row Dropping Execution)
-    # -------------------------------------------------------------------------
-    print(f"📋 Initial raw lines logged: {len(df)}")
-
-    # Isolate valid US geographic operational entries and known target records
-    valid_geo_mask = (df["FAAREGION"] != "FGN") & (df["FAAREGION"] != "UNKNOWN") & (df["FAAREGION"].notna())
-    known_target_mask = df["HAS_DAMAGE"].notna()
-
-    # Apply unified matrix filter down to structural modeling scope
-    df_model = df[valid_geo_mask & known_target_mask].copy()
-    df_model["HAS_DAMAGE"] = df_model["HAS_DAMAGE"].astype(int)
-
-    print(f"📊 Filtering complete. Safe modeling lines remaining: {len(df_model)}")
-
-
-    # -------------------------------------------------------------------------
-    # 7. Matrix Partitioning & Feature/Target Slicing
-    # -------------------------------------------------------------------------
+    # 2. STRICT FILTERING: Prevent dummy variable explosion
+    # UPDATED: Dropped "OPERATOR", Added "OPERATOR_CAT"
     features_to_keep = [
-        "MONTH", "SPEED", "HEIGHT", "LATITUDE", "LONGITUDE", 
+        "MONTH", "SPEED", "HEIGHT_BIN", "LATITUDE", "LONGITUDE", 
         "SIZE", "AC_MASS", "ENGINE_TYPE", "NUM_ENGS", "PHASE_GROUP", 
-        "OPERATOR_TYPE", "FAAREGION", "WARNED_FLAG", "TIME_BUCKET"
+        "OPERATOR_CAT", "FAAREGION", "WARNED", "COST_REPAIRS_INFL_ADJ", 
+        "COST_OTHER_INFL_ADJ"
     ]
-
-    X = df_model[features_to_keep].copy()
-    X = pd.get_dummies(X, drop_first=True)
     
-    y_class = df_model["HAS_DAMAGE"]
-    y_reg = df_model["TOTAL_COST_INFL_ADJ"]
+    # Keep only columns that exist to prevent KeyErrors
+    actual_cols = [c for c in features_to_keep if c in df.columns]
+    df = df[actual_cols]
 
-    # Execute strict Stratified 80/20 train/test partition to lock down target split balance
-    X_train, X_test, y_class_train, y_class_test, y_reg_train, y_reg_test = train_test_split(
-        X, y_class, y_reg, 
-        test_size=0.20, 
-        random_state=13, 
-        stratify=y_class
+    print("⚙️ Engineering physics and target features...")
+    # 3. PHYSICS ENGINEERING: Kinetic Energy Proxy
+    size_mass_map = {"SMALL": 1, "MEDIUM": 5, "LARGE": 15}
+    if "SIZE" in df.columns and "SPEED" in df.columns:
+        df["SIZE_CLEAN"] = df["SIZE"].fillna("UNKNOWN").astype(str).str.strip().str.upper()
+        df["KINETIC_ENERGY_PROXY"] = df["SIZE_CLEAN"].map(size_mass_map).fillna(1) * (pd.to_numeric(df["SPEED"], errors='coerce').fillna(0) ** 2)
+        
+    # Log transform the proxy
+    df["LOG_KINETIC_ENERGY"] = np.log1p(df["KINETIC_ENERGY_PROXY"])
+
+    # 4. TARGET ENGINEERING: The Hurdle
+    df["TOTAL_COST"] = pd.to_numeric(df.get("COST_REPAIRS_INFL_ADJ", 0), errors='coerce').fillna(0) + \
+                       pd.to_numeric(df.get("COST_OTHER_INFL_ADJ", 0), errors='coerce').fillna(0)
+    
+    df["HAS_DAMAGE"] = np.where(df["TOTAL_COST"] > 0, 1, 0)
+
+    if "WARNED" in df.columns:
+        df["WARNED_FLAG"] = np.where(df["WARNED"].astype(str).str.strip().str.upper() == "YES", 1, 0)
+
+    # Clean up redundant columns
+    cols_to_drop = ["COST_REPAIRS_INFL_ADJ", "COST_OTHER_INFL_ADJ", "WARNED", "SIZE", "SIZE_CLEAN", "KINETIC_ENERGY_PROXY"]
+    df = df.drop(columns=[c for c in cols_to_drop if c in df.columns])
+
+    return df
+
+def split_and_impute(df):
+    print("✂️ Splitting data to prevent information leakage...")
+    target_stage1 = df["HAS_DAMAGE"]
+    target_stage2 = df["TOTAL_COST"]
+    features = df.drop(columns=["HAS_DAMAGE", "TOTAL_COST"])
+
+    # 20% Holdout Vault
+    X_train, X_test, y_train_stage1, y_test_stage1, y_train_stage2, y_test_stage2 = train_test_split(
+        features, target_stage1, target_stage2, test_size=0.20, random_state=42, stratify=target_stage1
     )
 
-
-    # -------------------------------------------------------------------------
-    # 8. Isolated Continuous Factor Imputation (Zero Leakage Guardrail)
-    # -------------------------------------------------------------------------
-    # Derive positioning and velocity medians SOLELY based on training boundaries
-    median_speed = X_train["SPEED"].median()
-    median_height = X_train["HEIGHT"].median()
-    median_lat = X_train["LATITUDE"].median()
-    median_lon = X_train["LONGITUDE"].median()
-
-    # Apply training baselines to Training block
-    X_train["SPEED"] = X_train["SPEED"].fillna(median_speed)
-    X_train["HEIGHT"] = X_train["HEIGHT"].fillna(median_height)
-    X_train["LATITUDE"] = X_train["LATITUDE"].fillna(median_lat)
-    X_train["LONGITUDE"] = X_train["LONGITUDE"].fillna(median_lon)
-
-    # Broadcast training baselines directly to Testing block
-    X_test["SPEED"] = X_test["SPEED"].fillna(median_speed)
-    X_test["HEIGHT"] = X_test["HEIGHT"].fillna(median_height)
-    X_test["LATITUDE"] = X_test["LATITUDE"].fillna(median_lat)
-    X_test["LONGITUDE"] = X_test["LONGITUDE"].fillna(median_lon)
-
-    # Catch remaining open text null markers safely
-    X_train = X_train.fillna("UNKNOWN")
-    X_test = X_test.fillna("UNKNOWN")
-
-
-    # -------------------------------------------------------------------------
-    # 9. Isolate Stage 2 Subsets (Financial Severity Matrix)
-    # -------------------------------------------------------------------------
-    # Filter strictly for flights that incurred non-zero physical damages
-    damaged_train_mask = (y_class_train == 1)
-    X_train_reg = X_train[damaged_train_mask].copy()
+    print("🩹 Imputing 'UNKNOWN' categories and missing values...")
+    # Categorical Imputation: Replace "UNKNOWN" with the mode of the training set
+    # UPDATED: Dropped "OPERATOR", Added "OPERATOR_CAT"
+    cat_cols = ["AC_MASS", "HEIGHT_BIN", "PHASE_GROUP", "OPERATOR_CAT", "ENGINE_TYPE", "FAAREGION"]
     
-    # Target compression: Map highly skewed real currency to symmetric log spaces
-    y_train_reg_log = np.log1p(y_reg_train[damaged_train_mask])
+    for col in cat_cols:
+        if col in X_train.columns:
+            # Standardize missing as "UNKNOWN"
+            X_train[col] = X_train[col].fillna("UNKNOWN").astype(str).str.strip().str.upper()
+            X_test[col] = X_test[col].fillna("UNKNOWN").astype(str).str.strip().str.upper()
+            
+            # Find the most frequent class (excluding "UNKNOWN" itself)
+            valid_train = X_train[X_train[col] != "UNKNOWN"]
+            if not valid_train.empty:
+                train_mode = valid_train[col].mode().iloc[0] # Safely get the first mode value
+                X_train[col] = X_train[col].replace("UNKNOWN", train_mode)
+                X_test[col] = X_test[col].replace("UNKNOWN", train_mode)
 
+    # Numerical Imputation: Median
+    num_cols = ["SPEED", "LATITUDE", "LONGITUDE", "NUM_ENGS", "MONTH"]
+    for col in num_cols:
+        if col in X_train.columns:
+            X_train[col] = pd.to_numeric(X_train[col], errors='coerce')
+            X_test[col] = pd.to_numeric(X_test[col], errors='coerce')
+            
+            train_median = X_train[col].median()
+            X_train[col] = X_train[col].fillna(train_median)
+            X_test[col] = X_test[col].fillna(train_median)
 
-    # -------------------------------------------------------------------------
-    # 10. Save Artifacts & ZIP Bundling
-    # -------------------------------------------------------------------------
-    # Save Stage 1 Base Classification sets
-    X_train.to_csv(output_dir / "X_train_stage1.csv", index=False)
-    y_class_train.to_csv(output_dir / "y_train_stage1.csv", index=False)
-    X_test.to_csv(output_dir / "X_test_unfiltered.csv", index=False)
-    y_class_test.to_csv(output_dir / "y_test_stage1.csv", index=False)
+    print("🔀 One-Hot Encoding categorical variables...")
+    existing_cat_cols = [c for c in cat_cols if c in X_train.columns]
+    X_train_encoded = pd.get_dummies(X_train, columns=existing_cat_cols, drop_first=True)
+    X_test_encoded = pd.get_dummies(X_test, columns=existing_cat_cols, drop_first=True)
     
-    # Save Stage 2 Truncated Log-Continuous Regression sets
-    X_train_reg.to_csv(output_dir / "X_train_stage2.csv", index=False)
-    y_train_reg_log.to_csv(output_dir / "y_train_stage2_log.csv", index=False)
-    y_reg_test.to_csv(output_dir / "y_test_stage2_raw.csv", index=False)
+    # Ensure train and test have the exact same columns after dummy encoding
+    X_train_encoded, X_test_encoded = X_train_encoded.align(X_test_encoded, join='left', axis=1, fill_value=0)
 
-    print(f"✅ Modeling files compiled and written successfully to: {output_dir}")
-    print(f"📈 Stage 1 Partition splits: {len(X_train)} training entries | {len(X_test)} verification entries.")
-    print(f"📉 Stage 2 Positive damage subset sizing: {len(X_train_reg)} training entries.")
+    # Stage 2 specific matrices (Only where a cost occurred)
+    train_mask_stage2 = y_train_stage2 > 0
+    X_train_stage2 = X_train_encoded[train_mask_stage2]
+    y_train_stage2_log = np.log1p(y_train_stage2[train_mask_stage2])
 
-    # Automatically compress all 7 modeling CSVs into a single clean deployment zip
-    modeling_files = [
-        "X_train_stage1.csv", "y_train_stage1.csv", "X_test_unfiltered.csv", "y_test_stage1.csv",
-        "X_train_stage2.csv", "y_train_stage2_log.csv", "y_test_stage2_raw.csv"
-    ]
-    
-    zip_model_path = output_dir / "modeling_matrices_package.zip"
-    with zipfile.ZipFile(zip_model_path, 'w', zipfile.ZIP_DEFLATED) as zipf:
-        for filename in modeling_files:
-            file_to_zip = output_dir / filename
-            if file_to_zip.exists():
-                zipf.write(file_to_zip, arcname=filename)
+    return X_train_encoded, X_test_encoded, y_train_stage1, y_test_stage1, X_train_stage2, y_train_stage2_log, y_test_stage2
 
-    print(f"📦 Successfully compressed all 7 modeling matrices into:\n   {zip_model_path}")
+def package_matrices(matrices, out_dir):
+    print("📦 Packaging matrices into ZIP...")
+    os.makedirs(out_dir, exist_ok=True)
+    zip_path = os.path.join(out_dir, "modeling_matrices_package.zip")
 
+    with zipfile.ZipFile(zip_path, 'w', compression=zipfile.ZIP_DEFLATED) as z:
+        for name, df in matrices.items():
+            csv_buffer = io.StringIO()
+            # Convert series to dataframe so they package cleanly
+            if isinstance(df, pd.Series):
+                df = df.to_frame(name)
+            df.to_csv(csv_buffer, index=False)
+            z.writestr(f"{name}.csv", csv_buffer.getvalue())
+
+    print(f"✅ Data cleaning complete! Modeling matrices saved to {zip_path}")
 
 if __name__ == "__main__":
-    main()
+    # Resolve directories safely regardless of where the script is run from
+    base_dir = Path(__file__).resolve().parent.parent
+    data_path = base_dir / "data" / "raw" / "raw_data.csv"
+    out_dir = base_dir / "data" / "processed" / "modeling"
+
+    # Run the pipeline
+    df_clean = clean_and_engineer(data_path)
+    X_train_s1, X_test_unf, y_train_s1, y_test_s1, X_train_s2, y_train_s2_log, y_test_s2_raw = split_and_impute(df_clean)
+
+    matrices = {
+        "X_train_stage1": X_train_s1,
+        "X_test_unfiltered": X_test_unf,
+        "y_train_stage1": y_train_s1,
+        "y_test_stage1": y_test_s1,
+        "X_train_stage2": X_train_s2,
+        "y_train_stage2_log": y_train_s2_log,
+        "y_test_stage2_raw": y_test_s2_raw
+    }
+
+    package_matrices(matrices, out_dir)

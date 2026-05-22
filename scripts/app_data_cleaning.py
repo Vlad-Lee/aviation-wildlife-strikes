@@ -121,11 +121,8 @@ def main():
     existing_dam_cols = [col for col in dam_cols if col in df.columns]
     cond_component_damage = (df[existing_dam_cols] == 1).any(axis=1)
 
-    df["HAS_DAMAGE"] = np.where(
-        cond_damage_level | cond_component_damage,
-        1,
-        np.where(df["DAMAGE_LEVEL"] == "N", 0, np.nan)
-    )
+    # Define damage strictly by the financial threshold (Total Cost > 0)
+    df["HAS_DAMAGE"] = np.where(df["TOTAL_COST"] > 0, 1, 0)
 
     # Health and Safety indicators (Optimized boolean mapping)
     df["HAS_INJURY"] = (df["NR_INJURIES"] > 0).astype("Int8")

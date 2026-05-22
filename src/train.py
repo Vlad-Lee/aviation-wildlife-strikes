@@ -1,12 +1,13 @@
 import io
 import zipfile
 import os
+import json
 import joblib
+from pathlib import Path
 import pandas as pd
 import numpy as np
 from sklearn.ensemble import RandomForestClassifier, RandomForestRegressor
-from sklearn.metrics import classification_report, mean_absolute_error, r2_score
-
+from sklearn.metrics import classification_report, mean_absolute_error, r2_score, precision_score, recall_score
 
 def load_modeling_packages(zip_path="data/processed/modeling/modeling_matrices_package.zip"):
     """Extract and load the pre-split training and testing matrices."""
@@ -20,6 +21,19 @@ def load_modeling_packages(zip_path="data/processed/modeling/modeling_matrices_p
                     matrices[var_name] = pd.read_csv(f)
     return matrices
 
+def load_best_parameters(study_name):
+    """Loads the optimal parameters from the JSON audit logs."""
+    log_dir = Path(__file__).resolve().parent.parent / "logs" / "tuning"
+    file_path = log_dir / f"{study_name}_best_results.json"
+    
+    if not file_path.exists():
+        raise FileNotFoundError(f"🚨 Tuning log not found at {file_path}. Did you run tune.py?")
+        
+    with open(file_path, "r") as f:
+        data = json.load(f)
+        
+    print(f"✅ Loaded optimal parameters for {study_name}.")
+    return data["best_params"]
 
 def train_hurdle_model():
     # Ensure directory exists
@@ -27,26 +41,27 @@ def train_hurdle_model():
 
     matrices = load_modeling_packages()
 
-    X_train, X_test = matrices["X_train"], matrices["X_test"]
-
+    X_train = matrices["X_train_stage1"]
+    X_test = matrices["X_test_unfiltered"]
     y_train_cls = matrices["y_train_stage1"].values.ravel()
     y_test_cls = matrices["y_test_stage1"].values.ravel()
 
-    y_train_reg_log = matrices["y_train_stage2"].values.ravel()
     X_train_reg = matrices["X_train_stage2"]
+    y_train_reg_log = matrices["y_train_stage2_log"].values.ravel()
+    y_test_reg_raw = matrices["y_test_stage2_raw"].values.ravel()
 
-    y_test_reg_raw = matrices["y_test_stage2_raw"]
+    # Load parameters dynamically
+    stage1_params = load_best_parameters("stage1_classifier")
+    stage2_params = load_best_parameters("stage2_regressor")
 
     # -------------------------------------------------------------------------
     # STAGE 1: Classifier Hurdle (Did a financial loss occur?)
     # -------------------------------------------------------------------------
     print("\n🚀 Training Stage 1 Classifier (Random Forest)...")
 
+    # Unpack parameters using **
     clf = RandomForestClassifier(
-        n_estimators=250,
-        max_depth=20,
-        min_samples_leaf=1,
-        class_weight="balanced_subsample",
+        **stage1_params,
         random_state=42,
         n_jobs=-1
     )
@@ -57,19 +72,32 @@ def train_hurdle_model():
     y_pred_cls = clf.predict(X_test)
     y_prob_cls = clf.predict_proba(X_test)[:, 1]
 
-    print("\n📊 Stage 1 Classification Report:")
+    print("\n📊 Default Stage 1 Classification Report (Threshold 0.50):")
     print(classification_report(y_test_cls, y_pred_cls))
+
+    # Threshold Calibration Loop
+    print("\n🔍 Phase 1: Testing Probability Thresholds for Precision-Recall Trade-off...")
+    thresholds = [0.50, 0.55, 0.60, 0.65, 0.70, 0.75, 0.80, 0.85]
+    
+    print(f"{'Threshold':<12} | {'Precision (Class 1)':<20} | {'Recall (Class 1)':<20}")
+    print("-" * 60)
+    
+    for thresh in thresholds:
+        y_pred_custom = (y_prob_cls >= thresh).astype(int)
+        prec = precision_score(y_test_cls, y_pred_custom, zero_division=0)
+        rec = recall_score(y_test_cls, y_pred_custom, zero_division=0)
+        print(f"{thresh:<12.2f} | {prec:<20.4f} | {rec:<20.4f}")
+    print("-" * 60)
+    # ---------------------------------------
 
     # -------------------------------------------------------------------------
     # STAGE 2: Regressor (If a loss occurred, how much did it cost?)
     # -------------------------------------------------------------------------
     print("\n🚀 Training Stage 2 Regressor (Random Forest Regressor)...")
 
+    # Unpack parameters using **
     reg = RandomForestRegressor(
-        n_estimators=300,
-        max_depth=11,
-        min_samples_leaf=4,
-        max_features=0.5926834623509254,
+        **stage2_params,
         random_state=42,
         n_jobs=-1
     )
@@ -93,7 +121,6 @@ def train_hurdle_model():
     # -------------------------------------------------------------------------
     print("\n🧮 Calculating Combined Hurdle Expectations across the entire test set...")
     
-    # The total expected cost is modeled as: E[Cost | X] = P(Damage = 1 | X) * E[Cost | Damage = 1, X]
     all_reg_preds_logged = reg.predict(X_test)
     all_reg_preds_actual = np.expm1(all_reg_preds_logged)
     
