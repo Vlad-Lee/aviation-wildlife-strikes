@@ -34,6 +34,7 @@ def filter_df(
     out = df.copy()
 
     if start_year is not None and end_year is not None:
+        out["YEAR"] = pd.to_numeric(out["YEAR"], errors="coerce")
         out = out[
             (out["YEAR"] >= start_year) &
             (out["YEAR"] <= end_year)

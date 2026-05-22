@@ -1,0 +1,14 @@
+{
+    "study_name": "stage2_regressor",
+    "best_value": -1.1136510079829602,
+    "best_params": {
+        "n_estimators": 200,
+        "max_depth": 6,
+        "learning_rate": 0.03843429956445433,
+        "subsample": 0.8274298124555485,
+        "colsample_bytree": 0.7634132052461299,
+        "min_child_weight": 7,
+        "reg_alpha": 1.1531302395327234e-05,
+        "reg_lambda": 1.9794693704105342
+    }
+}

@@ -9,7 +9,6 @@ from app_utils.pages.time_patterns import show_time
 from app_utils.pages.seasonality import show_seasonality
 from app_utils.pages.aircraft import show_aircraft
 from app_utils.pages.species import show_species
-from app_utils.pages.cost_relationships import show_scatter_plot
 from app_utils.pages.prediction import show_prediction
 
 # -----------------------------
@@ -58,14 +57,13 @@ with st.sidebar:
         menu_title="Menu",
         options=[
             "Home",
-            "Cost Predictor",
+            "Damage Predictor",
             "Heatmap",
             "Yearly Strikes",
             "Time",
             "Seasonality",
             "Aircraft",
             "Species",
-            "Cost Relationships",
             "About",
         ],
         icons=[
@@ -77,7 +75,6 @@ with st.sidebar:
             "tropical-storm",
             "airplane",
             "feather",
-            "graph-up",
             "question",
         ],
         menu_icon="cast",
@@ -90,7 +87,7 @@ with st.sidebar:
 pages = {
     "Home": lambda: show_home(df, df_states, MIN_YEAR, MAX_YEAR),
     
-    "Cost Predictor": lambda: show_prediction(df_states, aircraft_list),
+    "Damage Predictor": lambda: show_prediction(df_states, aircraft_list),
 
     "Heatmap": lambda: show_heatmap(df_states, MIN_YEAR, MAX_YEAR, operator_list, time_of_day_list, aircraft_list),
 
@@ -103,8 +100,6 @@ pages = {
     "Aircraft": lambda: show_aircraft(df_states, MIN_YEAR, MAX_YEAR, operator_list, time_of_day_list, aircraft_list),
 
     "Species": lambda: show_species(df_states, MIN_YEAR, MAX_YEAR, operator_list, time_of_day_list, aircraft_list),
-
-    "Cost Relationships": lambda: show_scatter_plot(df_states, MIN_YEAR, MAX_YEAR, operator_list, time_of_day_list, aircraft_list),
 
     "About": show_about,
 }

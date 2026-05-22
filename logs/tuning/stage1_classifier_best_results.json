@@ -1,0 +1,10 @@
+{
+    "study_name": "stage1_classifier",
+    "best_value": 0.6077282691322713,
+    "best_params": {
+        "n_estimators": 150,
+        "max_depth": 20,
+        "min_samples_leaf": 5,
+        "class_weight": "balanced"
+    }
+}
