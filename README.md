@@ -25,10 +25,9 @@ An interactive Streamlit dashboard and two-stage hurdle model for analyzing and 
 - **Species** — top 15 wildlife species by strike frequency
 
 **Damage Predictor Model**
-- Stage 1: Random Forest binary classifier predicting whether a strike results in reportable financial damage
-- Stage 2: XGBoost regressor estimating cost for historical analysis (conditional on damage having occurred)
-- Hyperparameter tuning via Optuna with stratified cross-validation
-- Classification threshold calibrated on the held-out test set to maximize F1 score
+- Random Forest binary classifier predicting strike damage probability from pre-event flight parameters
+- Hyperparameter tuning via Optuna with stratified cross-validation (class weights included)
+- Classification threshold calibrated on held-out test set to balance precision/recall tradeoff
 
 ---
 
@@ -117,13 +116,58 @@ streamlit run app.py
 
 ## Model Overview
 
-The predictor uses a **two-stage hurdle model** trained on FAA records from 1990–2025.
+**Random Forest Classifier — Damage Prediction**
 
-**Stage 1 — Random Forest Classifier**
-Predicts the probability that a strike results in reportable financial damage using pre-event features: flight speed, altitude, wildlife size (kinetic energy proxy), aircraft mass class, engine type, operator category, FAA region, and temporal/environmental context.
+The dashboard uses a Random Forest binary classifier to predict the probability that a wildlife strike results in reportable financial damage. The model is trained on ~58,000 FAA records (1990–2025) and uses only pre-event features available before a strike occurs:
 
-**Stage 2 — XGBoost Regressor**
-Estimates repair cost for strikes where damage occurred, using the Stage 1 feature set plus post-event damage indicators (component damage flags, engine ingestion flags, aircraft-out-of-service hours). Used for historical analysis only — not exposed in the prediction UI, since these features are unavailable before a strike.
+- **Flight context:** Speed, altitude, aircraft mass class, engine type, operator category
+- **Environmental:** Weather conditions (precipitation, sky), bird season, time of day
+- **Spatial:** FAA region, latitude/longitude
+- **Physics:** Log kinetic energy (wildlife size × speed²)
+
+The model outputs a probability between 0 and 1; the dashboard applies a threshold of 0.55 to classify strikes as "high risk" for damage.
+
+---
+
+## Model Validation & Limitations
+
+**Test Set Performance (20% held-out, n=58,085 strikes)**
+
+| Metric | Value | Interpretation |
+|--------|-------|-----------------|
+| ROC-AUC | 0.860 | Strong discriminative ability |
+| Precision-Recall AUC | 0.196 | Weak due to class imbalance |
+| Sensitivity (Recall) | 29.9% | Catches ~30% of actual damage cases; misses 70% |
+| Specificity | 97.4% | Correctly identifies non-damage cases 97% of the time |
+| Precision | 22.2% | Only 1 in 5 positive predictions correct; 78% false alarms |
+| F1-Score | 0.255 | Low overall balance due to imbalance |
+
+**Class Distribution**
+- Non-damage cases: 56,689 (97.6%)
+- Damage cases: 1,396 (2.4%)
+- **Imbalance ratio: 40.6:1**
+
+**Key Limitations**
+
+1. **Extreme class imbalance** — With only 2.4% positive cases, the model is inherently biased toward predicting "no damage." The ROC-AUC of 0.86 is somewhat misleading; the more honest metric (Precision-Recall AUC of 0.196) reflects the difficulty of identifying the minority class.
+
+2. **Low sensitivity** — The model catches only ~30% of damage cases. For safety-critical applications, this miss rate is unacceptable. The threshold of 0.55 was auto-selected to maximize F1-score, but could be lowered to improve recall at the cost of more false positives.
+
+3. **High false positive rate** — 78% of predicted damage cases don't actually result in reported damage. This inflates user alerts and may reduce trust in the tool.
+
+4. **Limited feature set** — The model only uses flight parameters available before the strike. Real damage depends on complex factors not in the data: aircraft structural integrity, maintenance history, pilot evasion skill, strike angle, wildlife species, and whether the strike was reported at all (reporting bias).
+
+5. **Reporting bias** — Not all strikes that cause damage are reported to the FAA, especially minor incidents. The training target (reportable damage) is a noisy proxy for true damage.
+
+---
+
+## Future Work
+
+Potential improvements to explore:
+- Lower decision threshold (0.35–0.40) to improve recall at the cost of more false positives
+- Address class imbalance through resampling (SMOTE, downsampling) or cost-sensitive learning
+- Feature engineering: interactions (speed × wildlife size), temporal patterns, aircraft-specific normalization
+- Monitor threshold performance on new FAA data and retrain periodically
 
 ---
 
