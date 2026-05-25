@@ -78,10 +78,14 @@ def count_by(
 ###################################################################################################
 #Calculate count statistics
 def get_top_counts(df_states: pd.DataFrame) -> Dict[str, pd.DataFrame]:
+    carriers_df = count_by(df_states, 'OPERATOR', 'Carrier', n=10)
+    # Filter out Unknown before returning
+    carriers_df = carriers_df[carriers_df["Carrier"] != "Unknown"]
+
     return {
         'states': count_by(df_states, 'REGION_CLEAN', 'State', n=10),
         'airports': count_by(df_states, 'AIRPORT', 'Airport', n=10),
-        'carriers': count_by(df_states, 'OPERATOR', 'Carrier', n=10)
+        'carriers': carriers_df
     }
 
 def get_time_counts(df_states: pd.DataFrame) -> Dict[str, pd.DataFrame]:
