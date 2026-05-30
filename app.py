@@ -44,6 +44,7 @@ def show_about() -> None:
         **Vlad Lee** Data Scientist (MIDS, UC Berkeley)
 
         🔗 [LinkedIn](https://www.linkedin.com/in/vlad-lee)  
+        
         💻 [GitHub Repository](https://github.com/Vlad-Lee/Aviation-Wildlife-Strikes)
 
         📧 vlad7984@gmail.com
